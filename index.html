@@ -16,12 +16,38 @@
 
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { height: 100%; background: #12141a; }
-    body { overscroll-behavior: none; }
+    html {
+      height: 100%;
+      height: -webkit-fill-available;
+    }
+    body {
+      height: 100%;
+      height: -webkit-fill-available;
+      background: #12141a;
+      overscroll-behavior: none;
+      overflow: hidden;
+      position: fixed;
+      width: 100%;
+      top: 0;
+      left: 0;
+    }
     input[type="date"], input[type="number"] {
       color-scheme: dark;
     }
-    #root { height: 100%; }
+    #root {
+      height: 100%;
+      height: -webkit-fill-available;
+      overflow: hidden;
+      position: fixed;
+      width: 100%;
+      top: 0;
+      left: 0;
+    }
+    /* スクロール領域だけ許可 */
+    .scroll-area {
+      -webkit-overflow-scrolling: touch;
+      overflow-y: auto;
+    }
   </style>
 </head>
 <body>
@@ -467,13 +493,28 @@ function App() {
     {id:"history",label:"履歴",icon:<IconHistory/>},
   ];
 
+  // ボトムナビの高さ（safe-area込み）を計算するためのCSS変数
+  const NAV_H = 60;
+
   return (
     <div style={{
-      minHeight:"100vh",background:"#12141a",color:"#f0f0f0",
+      position:"fixed", inset:0,
+      background:"#12141a", color:"#f0f0f0",
       fontFamily:"'Hiragino Sans','Noto Sans JP',sans-serif",
-      display:"flex",flexDirection:"column",maxWidth:480,margin:"0 auto"
+      display:"flex", flexDirection:"column",
+      maxWidth:480, margin:"0 auto"
     }}>
-      <div style={{flex:1,overflowY:"auto",padding:"20px 16px 100px"}}>
+      {/* スクロール領域：上はsafe-area-inset-top、下はナビ分 */}
+      <div
+        className="scroll-area"
+        style={{
+          flex:1,
+          overflowY:"auto",
+          paddingTop:"calc(env(safe-area-inset-top, 0px) + 20px)",
+          paddingLeft:16, paddingRight:16,
+          paddingBottom:`calc(env(safe-area-inset-bottom, 0px) + ${NAV_H + 20}px)`
+        }}
+      >
         {screen==="home"&&(
           <HomeScreen grants={grants} usages={usages}
             onAddGrant={()=>setModal("grant")} onAddUsage={()=>setModal("usage")} />
@@ -484,19 +525,23 @@ function App() {
         )}
       </div>
 
+      {/* ボトムナビ */}
       <div style={{
-        position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",
-        width:"100%",maxWidth:480,
-        background:"#1c1f26",borderTop:"1px solid rgba(255,255,255,0.08)",
-        display:"flex",justifyContent:"space-around",
-        padding:"10px 0 env(safe-area-inset-bottom, 20px)"
+        position:"absolute", bottom:0, left:0, right:0,
+        background:"#1c1f26",
+        borderTop:"1px solid rgba(255,255,255,0.08)",
+        display:"flex", justifyContent:"space-around",
+        paddingTop:10,
+        paddingBottom:"env(safe-area-inset-bottom, 16px)",
+        minHeight:NAV_H,
+        flexShrink:0
       }}>
         {tabs.map(t => (
           <button key={t.id} onClick={()=>setScreen(t.id)} style={{
-            background:"none",border:"none",cursor:"pointer",
-            display:"flex",flexDirection:"column",alignItems:"center",gap:4,
+            background:"none", border:"none", cursor:"pointer",
+            display:"flex", flexDirection:"column", alignItems:"center", gap:4,
             color:screen===t.id?"#7a9fd0":"#445566",
-            fontSize:11,fontWeight:screen===t.id?700:400,padding:"4px 24px"
+            fontSize:11, fontWeight:screen===t.id?700:400, padding:"4px 24px"
           }}>
             {t.icon}{t.label}
           </button>
