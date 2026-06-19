@@ -109,37 +109,44 @@ function daysBetween(a, b) {
 function todayStr() { return new Date().toISOString().slice(0, 10); }
 
 function calcBalances(grants, usages) {
+  const today = todayStr();
   const sortedGrants = [...grants].sort((a, b) => a.date.localeCompare(b.date));
   const sortedUsages = [...usages].sort((a, b) => a.date.localeCompare(b.date));
-  const today = todayStr();
-  const activeGrants = sortedGrants.filter(g => g.expireDate >= today);
-  const expiredGrants = sortedGrants.filter(g => g.expireDate < today);
-  const remaining = activeGrants.map(g => ({ ...g, rem: g.days }));
-  let usagePool = [...sortedUsages];
 
-  for (const eg of expiredGrants) {
-    let pool = eg.days;
-    usagePool = usagePool.map(u => {
-      if (pool <= 0 || u.days <= 0) return u;
-      const consume = Math.min(pool, u.days);
-      pool -= consume;
-      return { ...u, days: u.days - consume };
-    });
+  // 各付与の残日数を初期化
+  const grantRem = sortedGrants.map(g => ({ ...g, rem: g.days }));
+
+  // 消化を古い付与から順に充当（消化日が付与の有効期間内のものを優先）
+  for (const u of sortedUsages) {
+    let toConsume = u.days;
+    // まず消化日が有効期間内の付与に充当
+    for (const g of grantRem) {
+      if (toConsume <= 0) break;
+      if (g.rem <= 0) continue;
+      if (u.date < g.date || u.date > g.expireDate) continue;
+      const consume = Math.min(g.rem, toConsume);
+      g.rem -= consume;
+      toConsume -= consume;
+    }
+    // 有効期間内の付与で賄えない分は有効中の付与に充当（フォールバック）
+    if (toConsume > 0) {
+      for (const g of grantRem) {
+        if (toConsume <= 0) break;
+        if (g.rem <= 0 || g.expireDate < today) continue;
+        const consume = Math.min(g.rem, toConsume);
+        g.rem -= consume;
+        toConsume -= consume;
+      }
+    }
   }
 
-  for (const r of remaining) {
-    usagePool = usagePool.map(u => {
-      if (r.rem <= 0 || u.days <= 0) return u;
-      const consume = Math.min(r.rem, u.days);
-      r.rem -= consume;
-      return { ...u, days: u.days - consume };
-    });
-  }
-
-  return remaining.map(r => {
-    const daysUntilExpiry = daysBetween(today, r.expireDate);
-    return { grant: r, remaining: Math.max(0, r.rem), daysUntilExpiry };
-  });
+  return grantRem
+    .filter(g => g.expireDate >= today)
+    .map(g => ({
+      grant: g,
+      remaining: Math.max(0, g.rem),
+      daysUntilExpiry: daysBetween(today, g.expireDate)
+    }));
 }
 
 // 今年度（4月始まり）の消化日数と義務残日数を計算
