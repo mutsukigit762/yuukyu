@@ -124,6 +124,20 @@ function calcBalances(grants, usages) {
   });
 }
 
+// 今年度（4月始まり）の取得日数と義務残日数を計算
+function calcObligationProgress(usages) {
+  const today = new Date();
+  const month = today.getMonth() + 1;
+  const year = today.getFullYear();
+  const fyStart = month >= 4 ? `${year}-04-01` : `${year - 1}-04-01`;
+  const fyEnd   = month >= 4 ? `${year + 1}-03-31` : `${year}-03-31`;
+  const taken = usages
+    .filter(u => u.date >= fyStart && u.date <= fyEnd)
+    .reduce((s, u) => s + u.days, 0);
+  const remaining = Math.max(0, 5 - taken);
+  return { taken, remaining, fyStart, fyEnd };
+}
+
 function calcNextGrant(grants) {
   const today = todayStr();
   const future = grants.filter(g => g.date > today).sort((a,b) => a.date.localeCompare(b.date));
@@ -289,6 +303,7 @@ function HomeScreen({ grants, usages, onAddGrant, onAddUsage }) {
   const totalRemaining = balances.reduce((s,b) => s+b.remaining, 0);
   const nextGrant = useMemo(() => calcNextGrant(grants), [grants]);
   const urgentBalances = balances.filter(b => b.daysUntilExpiry <= 90 && b.remaining > 0);
+  const obligation = useMemo(() => calcObligationProgress(usages), [usages]);
 
   function formatExpiry(days) {
     if (days <= 0) return "失効済み";
@@ -373,6 +388,32 @@ function HomeScreen({ grants, usages, onAddGrant, onAddUsage }) {
           </div>
         </div>
       )}
+
+      {/* 年5日義務の進捗 */}
+      <div style={{background:"#1c1f26",borderRadius:16,padding:"16px 20px",marginBottom:16}}>
+        <div style={{fontSize:12,color:"#8a8f9e",marginBottom:12,letterSpacing:"0.05em",textTransform:"uppercase"}}>年5日取得義務</div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+          <span style={{fontSize:13,color:"#8a9fc0"}}>今年度取得済み</span>
+          <span style={{fontSize:16,fontWeight:700,color:"#c0c8d8"}}>
+            {obligation.taken%1===0?obligation.taken:obligation.taken.toFixed(1)}日
+          </span>
+        </div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+          <span style={{fontSize:13,color:"#8a9fc0"}}>義務まで残り</span>
+          <span style={{fontSize:16,fontWeight:700,color:"#c0c8d8"}}>
+            {obligation.remaining%1===0?obligation.remaining:obligation.remaining.toFixed(1)}日
+          </span>
+        </div>
+        {/* プログレスバー */}
+        <div style={{background:"rgba(255,255,255,0.07)",borderRadius:99,height:6,overflow:"hidden"}}>
+          <div style={{
+            height:"100%",borderRadius:99,
+            width:`${Math.min(100, (obligation.taken/5)*100)}%`,
+            background: obligation.taken >= 5 ? "#4a9a6a" : "#4a6fa5",
+            transition:"width 0.4s ease"
+          }}/>
+        </div>
+      </div>
 
       <div style={{display:"flex",gap:12}}>
         <button onClick={onAddUsage} style={{
