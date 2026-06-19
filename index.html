@@ -57,22 +57,37 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+
+  <!-- Firebase -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getFirestore, collection, addDoc, deleteDoc, doc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCy2qi8vFTqlqjc0VBd8GEbuh6FO0fhs9w",
+      authDomain: "memo-ce334.firebaseapp.com",
+      projectId: "memo-ce334",
+      storageBucket: "memo-ce334.firebasestorage.app",
+      messagingSenderId: "732811990086",
+      appId: "1:732811990086:web:5b69ceb89f80cae7f9a647"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    const GRANTS = "yuukyu_grants";
+    const USAGES = "yuukyu_usages";
+
+    // Reactアプリに渡すためwindowに公開
+    window._db = db;
+    window._col = { grants: GRANTS, usages: USAGES };
+    window._firebase = { collection, addDoc, deleteDoc, doc, onSnapshot, query, orderBy };
+    window._firebaseReady = true;
+    window.dispatchEvent(new Event("firebaseReady"));
+  </script>
+
   <script type="text/babel" data-presets="react">
-const { useState, useMemo, useEffect } = React;
-
-const STORAGE_KEY = "paid-leave-data";
-
-function loadData() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch {}
-  return { grants: [], usages: [] };
-}
-
-function saveData(data) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch {}
-}
+const { useState, useMemo, useEffect, useRef } = React;
 
 function genId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -524,16 +539,55 @@ function HistoryScreen({ grants, usages, onDeleteGrant, onDeleteUsage }) {
 
 // ── メイン ──
 function App() {
-  const [data, setData] = useState(() => loadData());
-  const [screenIdx, setScreenIdx] = useState(0); // 0=home, 1=history
+  const [grants, setGrants] = useState([]);
+  const [usages, setUsages] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [screenIdx, setScreenIdx] = useState(0);
   const [modal, setModal] = useState(null);
-  const { grants, usages } = data;
 
-  function update(next) { setData(next); saveData(next); }
-  const addGrant = g => update({...data, grants:[...grants,g]});
-  const addUsage = u => update({...data, usages:[...usages,u]});
-  const deleteGrant = id => update({...data, grants:grants.filter(g=>g.id!==id)});
-  const deleteUsage = id => update({...data, usages:usages.filter(u=>u.id!==id)});
+  // Firestoreリアルタイム購読
+  useEffect(() => {
+    const { collection, onSnapshot, query, orderBy } = window._firebase;
+    const db = window._db;
+    const col = window._col;
+
+    const setup = () => {
+      const unsubGrants = onSnapshot(
+        query(collection(db, col.grants), orderBy("date", "asc")),
+        snap => {
+          setGrants(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+          setLoading(false);
+        }
+      );
+      const unsubUsages = onSnapshot(
+        query(collection(db, col.usages), orderBy("date", "asc")),
+        snap => setUsages(snap.docs.map(d => ({ id: d.id, ...d.data() })))
+      );
+      return () => { unsubGrants(); unsubUsages(); };
+    };
+
+    if (window._firebaseReady) return setup();
+    const handler = () => setup();
+    window.addEventListener("firebaseReady", handler);
+    return () => window.removeEventListener("firebaseReady", handler);
+  }, []);
+
+  async function addGrant(g) {
+    const { collection, addDoc } = window._firebase;
+    await addDoc(collection(window._db, window._col.grants), g);
+  }
+  async function addUsage(u) {
+    const { collection, addDoc } = window._firebase;
+    await addDoc(collection(window._db, window._col.usages), u);
+  }
+  async function deleteGrant(id) {
+    const { doc, deleteDoc } = window._firebase;
+    await deleteDoc(doc(window._db, window._col.grants, id));
+  }
+  async function deleteUsage(id) {
+    const { doc, deleteDoc } = window._firebase;
+    await deleteDoc(doc(window._db, window._col.usages, id));
+  }
 
   const tabs = [
     {id:"home",label:"ホーム",icon:<IconHome/>},
@@ -562,6 +616,15 @@ function App() {
     if (dx > 0) setScreenIdx(i => Math.max(i - 1, 0));               // 右スワイプ→前
     touchStartX.current = null;
   }
+
+  if (loading) return (
+    <div style={{
+      position:"fixed", inset:0, background:"#12141a",
+      display:"flex", alignItems:"center", justifyContent:"center",
+      color:"#445566", fontSize:14,
+      fontFamily:"-apple-system,'Hiragino Sans','Noto Sans JP',sans-serif"
+    }}>読み込み中...</div>
+  );
 
   return (
     <div style={{
