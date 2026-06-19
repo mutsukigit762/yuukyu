@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>有給管理</title>
-  <meta name="description" content="有給休暇の付与・取得を記録して残日数を管理するアプリ" />
+  <meta name="description" content="有給休暇の付与・消化を記録して残日数を管理するアプリ" />
 
   <!-- PWA -->
   <link rel="manifest" href="manifest.json" />
@@ -140,7 +140,7 @@ function calcBalances(grants, usages) {
   });
 }
 
-// 今年度（4月始まり）の取得日数と義務残日数を計算
+// 今年度（4月始まり）の消化日数と義務残日数を計算
 function calcObligationProgress(usages) {
   const today = new Date();
   const month = today.getMonth() + 1;
@@ -277,7 +277,7 @@ function GrantModal({ onClose, onSave }) {
   );
 }
 
-// ── 取得モーダル ──
+// ── 消化モーダル ──
 function UsageModal({ onClose, onSave }) {
   const [date, setDate] = useState(todayStr());
   const [days, setDays] = useState("1");
@@ -291,11 +291,11 @@ function UsageModal({ onClose, onSave }) {
   const presets = ["0.5","1","2","3"];
 
   return (
-    <Modal title="取得を記録" onClose={onClose}>
-      <Field label="取得日">
+    <Modal title="消化を記録" onClose={onClose}>
+      <Field label="消化日">
         <input type="date" value={date} onChange={e=>setDate(e.target.value)} style={inputStyle} />
       </Field>
-      <Field label="取得日数">
+      <Field label="消化日数">
         <div style={{display:"flex",gap:8,marginBottom:10}}>
           {presets.map(p => (
             <button key={p} onClick={()=>setDays(p)} style={{
@@ -412,9 +412,9 @@ function HomeScreen({ grants, usages, onAddGrant, onAddUsage }) {
 
       {/* 年5日義務の進捗 */}
       <div style={{background:"#1c1f26",borderRadius:16,padding:"16px 20px",marginBottom:16}}>
-        <div style={{fontSize:12,color:"#8a8f9e",marginBottom:12,letterSpacing:"0.05em",textTransform:"uppercase"}}>年5日取得義務</div>
+        <div style={{fontSize:12,color:"#8a8f9e",marginBottom:12,letterSpacing:"0.05em",textTransform:"uppercase"}}>年5日消化義務</div>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-          <span style={{fontSize:13,color:"#8a9fc0"}}>今年度取得済み</span>
+          <span style={{fontSize:13,color:"#8a9fc0"}}>今年度消化済み</span>
           <span style={{fontSize:16,fontWeight:700,color:"#c0c8d8"}}>
             {obligation.taken%1===0?obligation.taken:obligation.taken.toFixed(1)}日
           </span>
@@ -442,7 +442,7 @@ function HomeScreen({ grants, usages, onAddGrant, onAddUsage }) {
           border:"none",borderRadius:14,color:"#fff",fontSize:15,fontWeight:700,cursor:"pointer",
           display:"flex",alignItems:"center",justifyContent:"center",gap:8
         }}>
-          <IconPlus /> 取得を記録
+          <IconPlus /> 消化を記録
         </button>
         <button onClick={onAddGrant} style={{
           flex:1,padding:"16px",background:"rgba(74,111,165,0.25)",
@@ -498,7 +498,7 @@ function HistoryScreen({ grants, usages, onDeleteGrant, onDeleteUsage }) {
                     marginLeft:10,fontSize:12,
                     background:isGrant?"rgba(74,111,165,0.2)":"rgba(124,92,191,0.2)",
                     color:color,borderRadius:5,padding:"2px 7px"
-                  }}>{isGrant?"付与":"取得"}</span>
+                  }}>{isGrant?"付与":"消化"}</span>
                 </div>
                 {isGrant&&item.expireDate&&(
                   <div style={{fontSize:11,color:"#445566",marginTop:3}}>失効 {formatDate(item.expireDate)}</div>
@@ -519,7 +519,7 @@ function HistoryScreen({ grants, usages, onDeleteGrant, onDeleteUsage }) {
       {deleteTarget&&(
         <Modal title="削除の確認" onClose={()=>setDeleteTarget(null)}>
           <p style={{color:"#8a8f9e",fontSize:14,marginBottom:24}}>
-            {formatDate(deleteTarget.date)} の{deleteTarget.type==="grant"?"付与":"取得"}記録（{deleteTarget.days}日）を削除しますか？
+            {formatDate(deleteTarget.date)} の{deleteTarget.type==="grant"?"付与":"消化"}記録（{deleteTarget.days}日）を削除しますか？
           </p>
           <div style={{display:"flex",gap:10}}>
             <button onClick={()=>setDeleteTarget(null)} style={{
