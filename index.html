@@ -30,6 +30,7 @@
       width: 100%;
       top: 0;
       left: 0;
+      font-family: -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
     }
     input[type="date"], input[type="number"] {
       color-scheme: dark;
@@ -176,16 +177,20 @@ const IconAlert = () => (
 
 // ── モーダル ──
 function Modal({ title, onClose, children }) {
-  return (
+  const el = React.useMemo(() => document.body, []);
+  return ReactDOM.createPortal(
     <div style={{
-      position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",
+      position:"fixed",top:0,bottom:0,left:0,right:0,
+      background:"rgba(0,0,0,0.5)",
       display:"flex",alignItems:"flex-end",justifyContent:"center",
-      zIndex:100
+      zIndex:200
     }} onClick={e => e.target===e.currentTarget && onClose()}>
       <div style={{
         background:"#1c1f26",borderRadius:"20px 20px 0 0",
-        padding:"28px 24px 48px",width:"100%",maxWidth:480,
-        boxSizing:"border-box"
+        padding:"28px 24px",
+        width:"100%",maxWidth:480,
+        boxSizing:"border-box",
+        paddingBottom:"calc(32px + env(safe-area-inset-bottom, 0px))"
       }}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24}}>
           <span style={{fontSize:17,fontWeight:700,color:"#f0f0f0"}}>{title}</span>
@@ -196,7 +201,8 @@ function Modal({ title, onClose, children }) {
         </div>
         {children}
       </div>
-    </div>
+    </div>,
+    el
   );
 }
 
@@ -561,7 +567,7 @@ function App() {
     <div style={{
       position:"fixed", inset:0,
       background:"#12141a", color:"#f0f0f0",
-      fontFamily:"'Hiragino Sans','Noto Sans JP',sans-serif",
+      fontFamily:"-apple-system,'Hiragino Sans','Noto Sans JP',sans-serif",
       display:"flex", flexDirection:"column",
       maxWidth:480, margin:"0 auto"
     }}>
