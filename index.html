@@ -34,6 +34,8 @@
     }
     input[type="date"], input[type="number"] {
       color-scheme: dark;
+      width: 100%;
+      min-width: 0;
     }
     #root {
       height: 100%;
@@ -231,9 +233,10 @@ function Field({ label, children }) {
 }
 
 const inputStyle = {
-  width:"100%",boxSizing:"border-box",
+  width:"100%",boxSizing:"border-box",minWidth:0,
   background:"rgba(255,255,255,0.06)",border:"1.5px solid rgba(255,255,255,0.1)",
-  borderRadius:10,color:"#f0f0f0",fontSize:16,padding:"12px 14px",outline:"none"
+  borderRadius:10,color:"#f0f0f0",fontSize:16,padding:"12px 14px",outline:"none",
+  display:"block"
 };
 
 // ── 付与モーダル ──
