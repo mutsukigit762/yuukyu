@@ -558,13 +558,13 @@ function App() {
       const unsubGrants = onSnapshot(
         query(collection(db, col.grants), orderBy("date", "asc")),
         snap => {
-          setGrants(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+          setGrants(snap.docs.map(d => ({ ...d.data(), id: d.id })));
           setLoading(false);
         }
       );
       const unsubUsages = onSnapshot(
         query(collection(db, col.usages), orderBy("date", "asc")),
-        snap => setUsages(snap.docs.map(d => ({ id: d.id, ...d.data() })))
+        snap => setUsages(snap.docs.map(d => ({ ...d.data(), id: d.id })))
       );
       return () => { unsubGrants(); unsubUsages(); };
     };
