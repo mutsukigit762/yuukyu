@@ -63,6 +63,7 @@
   <!-- Firebase -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getAuth, onAuthStateChanged, signInWithPopup, GoogleAuthProvider } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
     import { getFirestore, collection, addDoc, deleteDoc, updateDoc, doc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
     const firebaseConfig = {
@@ -75,6 +76,31 @@
     };
 
     const app = initializeApp(firebaseConfig);
+
+    // ---- ログインの門番 ----
+    // ここを通り抜けるまで、この下のアプリ本体は一行も動かない。
+    // データベース側のルールも「ムツキだけ」に絞ってあるので、二重の守り。
+    const auth = getAuth(app);
+    if (!document.body) await new Promise((r) => document.addEventListener('DOMContentLoaded', r, { once: true }));
+    await new Promise((resolve) => {
+      const gate = document.createElement('div');
+      gate.style.cssText = 'position:fixed;inset:0;z-index:99999;display:none;flex-direction:column;align-items:center;justify-content:center;gap:18px;background:#111;color:#eee;font-family:system-ui,-apple-system,sans-serif;text-align:center;padding:24px';
+      gate.innerHTML = '<div style="font-size:15px;opacity:.75;line-height:1.7">このアプリはムツキ専用だよ<br>Googleでログインしてね</div>'
+        + '<button type="button" style="padding:14px 28px;font-size:16px;border:0;border-radius:12px;background:#4285f4;color:#fff;font-weight:600">Googleでログイン</button>'
+        + '<div style="font-size:13px;color:#f88;min-height:1.4em"></div>';
+      const btn = gate.querySelector('button');
+      const err = gate.querySelector('div:last-child');
+      btn.addEventListener('click', async () => {
+        btn.disabled = true; err.textContent = '';
+        try { await signInWithPopup(auth, new GoogleAuthProvider()); }
+        catch (e) { err.textContent = 'ログインできなかった：' + (e && e.code ? e.code : e); btn.disabled = false; }
+      });
+      document.body.appendChild(gate);
+      onAuthStateChanged(auth, (user) => {
+        if (user) { gate.remove(); resolve(); } else { gate.style.display = 'flex'; }
+      });
+    });
+
     const db = getFirestore(app);
 
     const GRANTS = "yuukyu_grants";
