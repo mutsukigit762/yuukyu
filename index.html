@@ -56,6 +56,34 @@
 <body>
   <div id="root"></div>
 
+  <!-- 真っ暗なまま何も出ない事故を防ぐ保険。何か落ちたら理由を画面に出す。 -->
+  <script>
+    (function () {
+      var lastError = "";
+      var remember = function (e) {
+        var r = (e && (e.reason || e.error || e.message)) || e;
+        lastError = (r && (r.message || r.code)) ? (r.message || r.code) : String(r);
+      };
+      window.addEventListener("error", remember);
+      window.addEventListener("unhandledrejection", remember);
+
+      setTimeout(function () {
+        var root = document.getElementById("root");
+        var drawn = root && root.children.length > 0;
+        var gate = document.querySelector('[data-g="title"]');
+        if (drawn || gate) return;
+        var box = document.createElement("div");
+        box.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;background:#12141a;color:#eee;font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;text-align:center;padding:24px';
+        box.innerHTML = '<div style="font-size:15px;line-height:1.7;opacity:.8">うまく開けなかった</div>'
+          + '<div style="font-size:12px;color:#f88;line-height:1.7;max-width:320px;word-break:break-word"></div>'
+          + '<button type="button" style="padding:12px 24px;font-size:15px;border:1px solid #444;border-radius:10px;background:transparent;color:#aaa">読み込み直す</button>';
+        box.querySelector("div:nth-child(2)").textContent = lastError || "通信が届いていないかもしれない";
+        box.querySelector("button").addEventListener("click", function () { location.reload(); });
+        document.body.appendChild(box);
+      }, 12000);
+    })();
+  </script>
+
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
@@ -82,34 +110,85 @@
     // データベース側のルールも「ムツキだけ」に絞ってあるので、二重の守り。
     const auth = getAuth(app);
     if (!document.body) await new Promise((r) => document.addEventListener('DOMContentLoaded', r, { once: true }));
+
+    // 何が起きても画面が真っ暗のままにならないよう、門番は最初から出しておく
+    const gate = document.createElement('div');
+    gate.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;background:#12141a;color:#eee;font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;text-align:center;padding:24px';
+    gate.innerHTML = '<div data-g="title" style="font-size:15px;opacity:.75;line-height:1.7">ログイン状態を確認中…</div>'
+      + '<button data-g="login" type="button" style="display:none;padding:14px 28px;font-size:16px;border:0;border-radius:12px;background:#4285f4;color:#fff;font-weight:600">Googleでログイン</button>'
+      + '<div data-g="msg" style="font-size:13px;color:#f88;line-height:1.7;min-height:1.4em;max-width:320px;word-break:break-word"></div>'
+      + '<button data-g="reload" type="button" style="display:none;padding:10px 20px;font-size:14px;border:1px solid #444;border-radius:10px;background:transparent;color:#aaa">読み込み直す</button>';
+    document.body.appendChild(gate);
+
+    const g = (name) => gate.querySelector('[data-g="' + name + '"]');
+    const gTitle = g('title'), gLogin = g('login'), gMsg = g('msg'), gReload = g('reload');
+    const codeOf = (e) => (e && (e.code || e.message)) ? (e.code || e.message) : String(e);
+    const say = (text, color) => { gMsg.textContent = text || ''; gMsg.style.color = color || '#f88'; };
+    const showLogin = () => {
+      gTitle.innerHTML = 'このアプリはムツキ専用だよ<br>Googleでログインしてね';
+      gLogin.style.display = '';
+      gLogin.disabled = false;
+      gReload.style.display = '';
+    };
+    gReload.addEventListener('click', () => location.reload());
+
+    // ホーム画面から開いた時（PWA）はポップアップがそもそも開けないので、最初から画面切り替え方式
+    const standalone = window.navigator.standalone === true
+      || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+    const REDIRECT_FLAG = 'yuukyu_redirecting';
+    const flag = {
+      set() { try { sessionStorage.setItem(REDIRECT_FLAG, '1'); } catch (e) {} },
+      taken() { try { const v = sessionStorage.getItem(REDIRECT_FLAG); sessionStorage.removeItem(REDIRECT_FLAG); return v === '1'; } catch (e) { return false; } }
+    };
+
+    const newProvider = () => {
+      const p = new GoogleAuthProvider();
+      p.setCustomParameters({ prompt: 'select_account' });
+      return p;
+    };
+
+    gLogin.addEventListener('click', async () => {
+      gLogin.disabled = true;
+      say('Googleに接続中…', '#aaa');
+      try {
+        if (standalone) { flag.set(); await signInWithRedirect(auth, newProvider()); return; }
+        await signInWithPopup(auth, newProvider());
+      } catch (e) {
+        // Safari はポップアップを塞ぐことがある。その時は画面ごと切り替える方式に回す。
+        try { flag.set(); await signInWithRedirect(auth, newProvider()); return; }
+        catch (e2) { showLogin(); say('ログインできなかった：' + codeOf(e2)); }
+      }
+    });
+
+    // 画面切り替え方式から戻ってきた時の結果を先に受け取る（固まった時のために時間制限つき）
+    let backNote = '';
+    try {
+      await Promise.race([
+        getRedirectResult(auth),
+        new Promise((r) => setTimeout(r, 10000))
+      ]);
+    } catch (e) {
+      backNote = 'ログインが戻ってこなかった：' + codeOf(e);
+    }
+    if (!backNote && flag.taken()) {
+      backNote = 'Googleから戻ってきたけどログインが残らなかったみたい。Safariの設定 →「サイト越えトラッキングを防ぐ」をオフにすると通ることがある。';
+    }
+
     await new Promise((resolve) => {
-      getRedirectResult(auth).catch(() => {});
-  const gate = document.createElement('div');
-      gate.style.cssText = 'position:fixed;inset:0;z-index:99999;display:none;flex-direction:column;align-items:center;justify-content:center;gap:18px;background:#111;color:#eee;font-family:system-ui,-apple-system,sans-serif;text-align:center;padding:24px';
-      gate.innerHTML = '<div style="font-size:15px;opacity:.75;line-height:1.7">このアプリはムツキ専用だよ<br>Googleでログインしてね</div>'
-        + '<button type="button" style="padding:14px 28px;font-size:16px;border:0;border-radius:12px;background:#4285f4;color:#fff;font-weight:600">Googleでログイン</button>'
-        + '<div style="font-size:13px;color:#f88;min-height:1.4em"></div>';
-      const btn = gate.querySelector('button');
-      const err = gate.querySelector('div:last-child');
-      btn.addEventListener('click', async () => {
-        btn.disabled = true; err.textContent = '';
-        try {
-          await signInWithPopup(auth, new GoogleAuthProvider());
-        } catch (e) {
-          // Safari はポップアップを塞ぐことがある。その時は画面ごと切り替える方式に回す。
-          try {
-            await signInWithRedirect(auth, new GoogleAuthProvider());
-            return;
-          } catch (e2) {
-            err.textContent = 'ログインできなかった：' + (e2 && e2.code ? e2.code : e2);
-            btn.disabled = false;
-          }
-        }
-      });
-      document.body.appendChild(gate);
-      onAuthStateChanged(auth, (user) => {
-        if (user) { gate.remove(); resolve(); } else { gate.style.display = 'flex'; }
-      });
+      let done = false;
+      const slow = setTimeout(() => {
+        if (done) return;
+        showLogin();
+        say('サーバーの返事が遅いみたい。ログインを試すか、読み込み直してみて。', '#aaa');
+      }, 8000);
+      onAuthStateChanged(
+        auth,
+        (user) => {
+          if (user) { done = true; clearTimeout(slow); gate.remove(); resolve(); }
+          else { clearTimeout(slow); showLogin(); if (backNote) say(backNote); }
+        },
+        (e) => { clearTimeout(slow); showLogin(); say('認証エラー：' + codeOf(e)); }
+      );
     });
 
     const db = getFirestore(app);
@@ -690,11 +769,13 @@ function App() {
 
   // Firestoreリアルタイム購読
   useEffect(() => {
-    const { collection, onSnapshot, query, orderBy } = window._firebase;
-    const db = window._db;
-    const col = window._col;
-
+    // ログインが済むまで window._firebase はまだ存在しない。
+    // ここで先に取り出すと画面が真っ白のまま落ちるので、setup の中で取る。
     const setup = () => {
+      const { collection, onSnapshot, query, orderBy } = window._firebase;
+      const db = window._db;
+      const col = window._col;
+
       const unsubGrants = onSnapshot(
         query(collection(db, col.grants), orderBy("date", "asc")),
         snap => {
@@ -710,9 +791,15 @@ function App() {
     };
 
     if (window._firebaseReady) return setup();
-    const handler = () => setup();
+
+    // 後からログインが通った時も、ちゃんと購読を止められるようにしておく
+    let unsub = null;
+    const handler = () => { unsub = setup(); };
     window.addEventListener("firebaseReady", handler);
-    return () => window.removeEventListener("firebaseReady", handler);
+    return () => {
+      window.removeEventListener("firebaseReady", handler);
+      if (unsub) unsub();
+    };
   }, []);
 
   async function addGrant(g) {
